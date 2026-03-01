@@ -744,18 +744,33 @@
 
       offCtx.clearRect(0, 0, W, H);
 
-      // Draw video + mask both mirrored so it feels like a selfie mirror
+      // Cover-fit crop: take the center of the video that matches canvas ratio
+      // so phones with wide cameras (16:9) don't look squeezed
+      const vw = video.videoWidth, vh = video.videoHeight;
+      const canvasAR = W / H;   // 0.75 (portrait)
+      const videoAR = vw / vh;
+      let sx = 0, sy = 0, sw = vw, sh = vh;
+      if (videoAR > canvasAR) {
+        // Camera wider than canvas — crop left/right
+        sw = vh * canvasAR;
+        sx = (vw - sw) / 2;
+      } else {
+        // Camera taller than canvas — crop top/bottom
+        sh = vw / canvasAR;
+        sy = (vh - sh) / 2;
+      }
+
+      // Draw video + mask both mirrored (selfie feel), using cover crop
       offCtx.save();
       offCtx.scale(-1, 1);
-      offCtx.drawImage(video, -W, 0, W, H);
+      offCtx.drawImage(video, sx, sy, sw, sh, -W, 0, W, H);
       offCtx.globalCompositeOperation = 'destination-in';
-      offCtx.drawImage(lastSegMask, -W, 0, W, H);
+      offCtx.drawImage(lastSegMask, sx, sy, sw, sh, -W, 0, W, H);
       offCtx.globalCompositeOperation = 'source-over';
       offCtx.restore();
 
       // Render to visible seg canvas
       segCtx.clearRect(0, 0, W, H);
-      // Optional: slight edge feather / comic-book outline
       segCtx.shadowColor = 'rgba(30,10,60,0.7)';
       segCtx.shadowBlur = 10;
       segCtx.drawImage(offCanvas, 0, 0);
