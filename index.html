@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SF Food Catcher 🌉</title>
+
+  <!-- MediaPipe -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"
+    crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Bangers&family=Nunito:wght@700;900&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0a0a1a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'Nunito', sans-serif;
+      user-select: none;
+    }
+
+    #game-wrapper {
+      position: relative;
+      width: 540px;
+      height: 720px;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 0 60px rgba(255, 150, 50, 0.5), 0 0 120px rgba(255, 100, 20, 0.25);
+    }
+
+    /* Hidden video element for camera input */
+    #input-video {
+      display: none;
+    }
+
+    /* Layered canvases */
+    #bg-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+    }
+
+    #seg-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    #game-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+    }
+
+    /* HUD bar at top */
+    #hud {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 90px;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(6px);
+      border-bottom: 2px solid rgba(255, 200, 80, 0.35);
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      gap: 12px;
+    }
+
+    /* Tongue trace mini map */
+    #trace-canvas {
+      width: 220px;
+      height: 66px;
+      border: 1.5px solid rgba(255, 200, 80, 0.35);
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.4);
+      flex-shrink: 0;
+    }
+
+    #hud-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      color: white;
+    }
+
+    #timer-display {
+      font-family: 'Bangers', cursive;
+      font-size: 38px;
+      color: #FFD700;
+      text-shadow: 0 0 12px rgba(255, 215, 0, 0.8);
+      line-height: 1;
+    }
+
+    #score-display {
+      font-size: 17px;
+      font-weight: 900;
+      color: #fff;
+    }
+
+    #hud-tip {
+      font-size: 11px;
+      color: rgba(255, 255, 200, 0.65);
+      font-style: italic;
+    }
+
+    /* Start screen */
+    #start-screen {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.72);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      gap: 14px;
+      text-align: center;
+      padding: 30px;
+    }
+
+    #start-screen .icon {
+      font-size: 56px;
+    }
+
+    #start-screen h1 {
+      font-family: 'Bangers', cursive;
+      font-size: 48px;
+      color: #fff;
+      letter-spacing: 2px;
+      text-shadow: 0 0 20px rgba(255, 150, 50, 0.9);
+    }
+
+    #start-screen p {
+      font-size: 15px;
+      color: rgba(255, 255, 200, 0.85);
+      line-height: 1.65;
+      max-width: 360px;
+    }
+
+    #start-screen .how {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 200, 80, 0.3);
+      border-radius: 14px;
+      padding: 12px 20px;
+      font-size: 14px;
+      color: rgba(255, 255, 200, 0.9);
+      line-height: 1.8;
+      text-align: left;
+    }
+
+    /* Camera permission status */
+    #cam-status {
+      font-size: 13px;
+      color: rgba(255, 200, 100, 0.8);
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 8px;
+      padding: 6px 14px;
+    }
+
+    .btn {
+      background: linear-gradient(135deg, #FF6B35, #FFD700);
+      border: none;
+      border-radius: 50px;
+      padding: 14px 44px;
+      font-family: 'Bangers', cursive;
+      font-size: 24px;
+      letter-spacing: 2px;
+      color: #1a0a2e;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(255, 107, 53, 0.5);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+
+    .btn:hover {
+      transform: scale(1.06);
+      box-shadow: 0 6px 30px rgba(255, 107, 53, 0.7);
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* End screen */
+    #end-screen {
+      position: absolute;
+      inset: 0;
+      background: rgba(5, 5, 20, 0.95);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      z-index: 20;
+      padding: 10px 16px 16px;
+      overflow-y: auto;
+      gap: 8px;
+    }
+
+    #end-screen h2 {
+      font-family: 'Bangers', cursive;
+      font-size: 36px;
+      color: #FFD700;
+      text-shadow: 0 0 16px rgba(255, 215, 0, 0.8);
+      letter-spacing: 2px;
+      margin-top: 4px;
+    }
+
+    #final-score {
+      font-size: 18px;
+      font-weight: 900;
+      color: #fff;
+    }
+
+    /* Big art */
+    #art-canvas {
+      border: 2px solid rgba(255, 200, 80, 0.5);
+      border-radius: 14px;
+      background: #05050f;
+      box-shadow: 0 0 24px rgba(255, 200, 80, 0.2);
+    }
+
+    /* Food log */
+    #food-log {
+      color: rgba(255, 255, 200, 0.85);
+      font-size: 13px;
+      line-height: 1.8;
+      text-align: left;
+    }
+
+    .end-label {
+      font-size: 11px;
+      color: rgba(255, 255, 200, 0.45);
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* Contact form */
+    #contact-form {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 200, 80, 0.25);
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    #contact-form .form-title {
+      font-size: 13px;
+      font-weight: 900;
+      color: #FFD700;
+      letter-spacing: 0.5px;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .form-row input {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 200, 80, 0.3);
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: #fff;
+      font-size: 13px;
+      font-family: 'Nunito', sans-serif;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-row input::placeholder {
+      color: rgba(255, 255, 200, 0.35);
+    }
+
+    .form-row input:focus {
+      border-color: rgba(255, 200, 80, 0.7);
+    }
+
+    #send-art-btn {
+      background: linear-gradient(135deg, #7b2fff, #e040fb);
+      border: none;
+      border-radius: 8px;
+      padding: 9px 14px;
+      font-family: 'Bangers', cursive;
+      font-size: 16px;
+      letter-spacing: 1px;
+      color: #fff;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: 0 3px 14px rgba(123, 47, 255, 0.45);
+      transition: transform 0.1s;
+    }
+
+    #send-art-btn:hover {
+      transform: scale(1.04);
+    }
+
+    #send-art-btn:active {
+      transform: scale(0.97);
+    }
+
+    #send-status {
+      font-size: 12px;
+      color: rgba(255, 255, 200, 0.6);
+      text-align: center;
+      min-height: 16px;
+    }
+
+    /* Leaderboard */
+    #leaderboard-wrap {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 200, 80, 0.2);
+      border-radius: 14px;
+      padding: 10px 14px;
+    }
+
+    #leaderboard-wrap .lb-title {
+      font-family: 'Bangers', cursive;
+      font-size: 18px;
+      color: #FFD700;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+
+    .lb-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 13px;
+      color: rgba(255, 255, 200, 0.85);
+    }
+
+    .lb-row:last-child {
+      border-bottom: none;
+    }
+
+    .lb-rank {
+      font-family: 'Bangers', cursive;
+      font-size: 16px;
+      color: #FFD700;
+      min-width: 22px;
+    }
+
+    .lb-rank.gold {
+      color: #FFD700;
+    }
+
+    .lb-rank.silver {
+      color: #C0C0C0;
+    }
+
+    .lb-rank.bronze {
+      color: #CD7F32;
+    }
+
+    .lb-name {
+      flex: 1;
+      font-weight: 700;
+    }
+
+    .lb-pts {
+      font-weight: 900;
+      color: #fff;
+    }
+
+    .lb-you {
+      font-size: 10px;
+      color: #7bff7b;
+      margin-left: 2px;
+    }
+
+    .score-popup {
+      position: absolute;
+      pointer-events: none;
+      font-size: 24px;
+      font-weight: 900;
+      color: #FFD700;
+      text-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
+      animation: floatup 0.9s forwards;
+      z-index: 30;
+    }
+
+    @keyframes floatup {
+      0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+
+      100% {
+        opacity: 0;
+        transform: translateY(-70px) scale(1.5);
+      }
+    }
+
+    /* Mouth open indicator */
+    #mouth-indicator {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      background: rgba(0, 0, 0, 0.55);
+      border-radius: 50px;
+      padding: 6px 14px;
+      color: white;
+      font-size: 13px;
+      font-weight: 700;
+      z-index: 15;
+      display: none;
+      border: 1.5px solid rgba(255, 200, 80, 0.4);
+    }
+
+    #mouth-indicator.open {
+      color: #7bff7b;
+      border-color: rgba(100, 255, 100, 0.5);
+    }
+  </style>
+</head>
+
+<body>
+
+  <video id="input-video" playsinline autoplay muted></video>
+
+  <div id="game-wrapper">
+    <canvas id="bg-canvas" width="540" height="720"></canvas>
+    <canvas id="seg-canvas" width="540" height="720"></canvas>
+    <canvas id="game-canvas" width="540" height="720"></canvas>
+
+    <!-- Hidden composite canvas for recording -->
+    <canvas id="record-canvas" width="540" height="720" style="display:none;"></canvas>
+
+    <!-- HUD top bar -->
+    <div id="hud">
+      <canvas id="trace-canvas" width="220" height="66"></canvas>
+      <div id="hud-stats">
+        <div id="timer-display">10</div>
+        <div id="score-display">🍴 Score: 0</div>
+        <div id="hud-tip">Open mouth to extend tongue · Tilt head to aim</div>
+      </div>
+    </div>
+
+    <!-- Mouth indicator -->
+    <div id="mouth-indicator">😮 MOUTH OPEN</div>
+
+    <!-- Start Screen -->
+    <div id="start-screen">
+      <div class="icon">🌉</div>
+      <h1>SF Food Catcher!</h1>
+      <div
+        style="font-family:'Bangers',cursive;font-size:20px;color:#FFD700;letter-spacing:1px;text-shadow:0 0 10px rgba(255,215,0,0.6);">
+        HOW MUCH FOOD CAN YOU CATCH IN 10 SECONDS? 🍽️
+      </div>
+      <div class="how">
+        😮 <strong>Open your mouth</strong> to shoot your tongue<br>
+        ↔️ <strong>Tilt your head</strong> to aim the tongue<br>
+        🦀 Catch the Dungeness Crab for <strong>50pts!</strong>
+      </div>
+      <div style="font-size:14px;color:rgba(255,255,200,0.55);letter-spacing:1px;">
+        🍩 🥐 🍔 🥖 🌯 🦀 🍨 🥠
+      </div>
+      <button class="btn" id="start-btn" disabled>Start Eating!</button>
+    </div>
+
+
+    <!-- End Screen -->
+    <div id="end-screen">
+      <h2>Time's Up! 🎉</h2>
+      <div id="final-score"></div>
+
+      <!-- Big art canvas -->
+      <div class="end-label">YOUR TONGUE ART 🎨</div>
+      <canvas id="art-canvas" width="360" height="270"></canvas>
+      <div class="end-label">Your tongue traced this masterpiece ☝️</div>
+
+      <!-- Foods caught -->
+      <div id="food-log" style="text-align:center;"></div>
+
+      <!-- Video replay -->
+      <div id="replay-video-wrap" style="display:none;width:100%;">
+        <div class="end-label" style="margin-bottom:4px;">🎬 YOUR GAME REPLAY</div>
+        <video id="replay-video" controls loop playsinline
+          style="width:100%;border-radius:12px;border:1.5px solid rgba(255,200,80,0.35);background:#000;"></video>
+      </div>
+
+      <!-- Contact form -->
+      <div id="contact-form">
+        <div class="form-title">📨 Get your artwork instantly</div>
+        <div class="form-row">
+          <input id="contact-name" type="text" placeholder="Your name" />
+          <input id="contact-phone" type="tel" placeholder="Phone number" />
+        </div>
+        <div class="form-row">
+          <input id="contact-email" type="email" placeholder="Email" />
+          <button id="send-art-btn" style="flex-shrink:0;">⬇ Save</button>
+        </div>
+        <div id="send-status"></div>
+      </div>
+
+      <!-- Leaderboard -->
+      <div id="leaderboard-wrap">
+        <div class="lb-title">🏆 Leaderboard</div>
+        <div id="leaderboard-list"></div>
+      </div>
+
+      <button class="btn" id="replay-btn">🔄 Play Again</button>
+    </div>
+  </div>
+
+  <!-- ─── SCRIPTS ───────────────────────────────────────────────── -->
+  <script>
+    const W = 540, H = 720;
+
+    // ─── CANVAS REFS ─────────────────────────────────────────────────
+    const bgCanvas = document.getElementById('bg-canvas');
+    const bgCtx = bgCanvas.getContext('2d');
+
+    const segCanvas = document.getElementById('seg-canvas');
+    const segCtx = segCanvas.getContext('2d');
+
+    const gameCanvas = document.getElementById('game-canvas');
+    const ctx = gameCanvas.getContext('2d');
+
+    const traceCanvas = document.getElementById('trace-canvas');
+    const traceCtx = traceCanvas.getContext('2d');
+
+    const artCanvas = document.getElementById('art-canvas');
+    const artCtx = artCanvas.getContext('2d');
+
+    const video = document.getElementById('input-video');
+
+    const recCanvas = document.getElementById('record-canvas');
+    const recCtx = recCanvas.getContext('2d');
+
+    // ─── VIDEO RECORDING ─────────────────────────────────────────────
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let recordedVideoUrl = null;
+
+    function startRecording() {
+      recordedChunks = [];
+      recordedVideoUrl = null;
+      document.getElementById('replay-video-wrap').style.display = 'none';
+      const stream = recCanvas.captureStream(30);
+      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+        ? 'video/webm;codecs=vp9' : 'video/webm';
+      try { mediaRecorder = new MediaRecorder(stream, { mimeType: mime }); }
+      catch (e) { mediaRecorder = new MediaRecorder(stream); }
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+        if (recordedVideoUrl) URL.revokeObjectURL(recordedVideoUrl);
+        recordedVideoUrl = URL.createObjectURL(blob);
+        const vid = document.getElementById('replay-video');
+        vid.src = recordedVideoUrl;
+        vid.play().catch(() => { });
+        document.getElementById('replay-video-wrap').style.display = 'block';
+      };
+      mediaRecorder.start(100);
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    }
+
+    // ─── BACKGROUND ──────────────────────────────────────────────────
+    const bgImage = new Image();
+    bgImage.src = 'bg.png';
+
+    function drawBackground() {
+      bgCtx.clearRect(0, 0, W, H);
+      if (bgImage.complete && bgImage.naturalWidth > 0) {
+        // Draw BG centered/cropped to portrait frame
+        const sw = bgImage.naturalWidth, sh = bgImage.naturalHeight;
+        const scale = Math.max(W / sw, H / sh);
+        const dw = sw * scale, dh = sh * scale;
+        bgCtx.drawImage(bgImage, (W - dw) / 2, (H - dh) / 2, dw, dh);
+      } else {
+        const g = bgCtx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, '#FF8C42'); g.addColorStop(1, '#1a1a4e');
+        bgCtx.fillStyle = g; bgCtx.fillRect(0, 0, W, H);
+      }
+      // Subtle comic-book vignette
+      const vig = bgCtx.createRadialGradient(W / 2, H / 2, W * 0.25, W / 2, H / 2, W * 0.8);
+      vig.addColorStop(0, 'rgba(0,0,0,0)');
+      vig.addColorStop(1, 'rgba(0,0,10,0.5)');
+      bgCtx.fillStyle = vig; bgCtx.fillRect(0, 0, W, H);
+    }
+    bgImage.onload = drawBackground;
+    drawBackground();
+
+    // ─── FOOD TYPES ──────────────────────────────────────────────────
+    const FOOD_TYPES = [
+      { id: 'donut', emoji: '🍩', label: "Bob's Glazed Donut", pts: 10, sz: 42 },
+      { id: 'fritter', emoji: '🥐', label: "Bob's Apple Fritter", pts: 15, sz: 40 },
+      { id: 'burger', emoji: '🍔', label: "Super Duper Burger", pts: 12, sz: 40 },
+      { id: 'bread', emoji: '🥖', label: "Dutch Crunch Bread", pts: 8, sz: 38 },
+      { id: 'burrito', emoji: '🌯', label: "Mission Burrito", pts: 18, sz: 44 },
+      { id: 'crab', emoji: '🦀', label: "Dungeness Crab ⭐", pts: 50, sz: 48 },
+      { id: 'sundae', emoji: '🍨', label: "Ghirardelli Sundae", pts: 20, sz: 44 },
+      { id: 'fortune', emoji: '🥠', label: "Fortune Cookie", pts: 25, sz: 38 },
+    ];
+
+    // ─── GAME STATE ──────────────────────────────────────────────────
+    let gameActive = false;
+    let timeLeft = 10;
+    let score = 0;
+    let timerInterval = null;
+    let foods = [];
+    let particles = [];
+    let tonguePoints = [];
+    let caughtFoods = [];
+    let spawnCount = 0;
+    let frameCount = 0;
+
+    // Face / tongue state
+    let faceLandmarks = null;
+    let mouthOpen = false; // is mouth currently open?
+    let MOUTH_OPEN_THRESH = 0.045; // normalised units (tunable)
+    let mouthCenter = { x: W / 2, y: H * 0.62 }; // world coords
+    let headTiltAngle = 0;    // radians (tilt of head roll)
+    let tongueLen = 0;    // current drawn length (spring)
+    const TONGUE_MAX = 200;
+    const TONGUE_SPRING = 0.28;
+    let segmentationReady = false;
+
+    // ─── MEDIAPIPE SETUP ─────────────────────────────────────────────
+    let selfieSegmentation, faceMesh;
+
+    function initMediaPipe() {
+      // Selfie Segmentation
+      selfieSegmentation = new SelfieSegmentation({
+        locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`
+      });
+      selfieSegmentation.setOptions({ modelSelection: 1 });
+      selfieSegmentation.onResults(onSegResults);
+
+      // Face Mesh
+      faceMesh = new FaceMesh({
+        locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
+      });
+      faceMesh.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+      faceMesh.onResults(onFaceResults);
+    }
+
+    // ─── SEGMENTATION RESULT ─────────────────────────────────────────
+    let lastSegMask = null;
+
+    function onSegResults(results) {
+      if (!results.segmentationMask) return;
+      lastSegMask = results.segmentationMask;
+    }
+
+    // ─── FACE RESULT ─────────────────────────────────────────────────
+    function onFaceResults(results) {
+      if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+        faceLandmarks = results.multiFaceLandmarks[0];
+
+        // ── Mouth openness ──
+        // Upper lip: lm 13, Lower lip: lm 14
+        const upperLip = faceLandmarks[13];
+        const lowerLip = faceLandmarks[14];
+        const mouthH = Math.abs(lowerLip.y - upperLip.y); // normalised 0-1
+        mouthOpen = mouthH > MOUTH_OPEN_THRESH;
+
+        // ── Mouth world position ──
+        // Center of mouth: midpoint of left corner (61) and right corner (291)
+        const mLeft = faceLandmarks[61];
+        const mRight = faceLandmarks[291];
+        const mx = ((mLeft.x + mRight.x) / 2);
+        const my = ((mLeft.y + mRight.y) / 2);
+        mouthCenter.x = (1 - mx) * W;
+        mouthCenter.y = my * H;
+
+        // ── Head roll for tongue aim ──
+        // Use nose tip (1) and chin (152) to get up-direction vector, then compute roll
+        const noseTip = faceLandmarks[1];
+        const chin = faceLandmarks[152];
+        const leftEar = faceLandmarks[234];
+        const rightEar = faceLandmarks[454];
+        // Roll = angle of ear axis from horizontal
+        const ex = (leftEar.x - rightEar.x) * W;
+        const ey = (rightEar.y - leftEar.y) * H;
+        headTiltAngle = Math.atan2(ey, ex); // tilt of the head-roll axis
+        // Tongue points roughly "up" relative to head orientation
+        // We also allow slight yaw: use nose direction
+      } else {
+        faceLandmarks = null;
+        mouthOpen = false;
+      }
+
+      updateMouthIndicator();
+    }
+
+    // ─── COMPOSITE PERSON OVER BG ────────────────────────────────────
+    // Offscreen to composite seg mask + video frame
+    const offCanvas = new OffscreenCanvas(W, H);
+    const offCtx = offCanvas.getContext('2d');
+
+    function compositeSegmentation() {
+      if (!lastSegMask || !video.videoWidth) return;
+
+      offCtx.clearRect(0, 0, W, H);
+
+      // Draw video + mask both mirrored so it feels like a selfie mirror
+      offCtx.save();
+      offCtx.scale(-1, 1);
+      offCtx.drawImage(video, -W, 0, W, H);
+      offCtx.globalCompositeOperation = 'destination-in';
+      offCtx.drawImage(lastSegMask, -W, 0, W, H);
+      offCtx.globalCompositeOperation = 'source-over';
+      offCtx.restore();
+
+      // Render to visible seg canvas
+      segCtx.clearRect(0, 0, W, H);
+      // Optional: slight edge feather / comic-book outline
+      segCtx.shadowColor = 'rgba(30,10,60,0.7)';
+      segCtx.shadowBlur = 10;
+      segCtx.drawImage(offCanvas, 0, 0);
+      segCtx.shadowBlur = 0;
+    }
+
+    // ─── TONGUE DRAWING ──────────────────────────────────────────────
+    function getTongueTip() {
+      // Tongue shoots upward from mouth, rotated by head roll + slight left/right lean
+      // The "up" direction in screen space accounting for head roll
+      const angle = headTiltAngle - Math.PI / 2; // rotate 90° so it points up relative to head
+      return {
+        x: mouthCenter.x + Math.cos(angle) * tongueLen,
+        y: mouthCenter.y + Math.sin(angle) * tongueLen,
+      };
+    }
+
+    function drawTongue() {
+      if (tongueLen < 8) return;
+      const tip = getTongueTip();
+      const ox = mouthCenter.x;
+      const oy = mouthCenter.y;
+
+      const dx = tip.x - ox, dy = tip.y - oy;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 4) return;
+
+      const px = -dy / dist, py = dx / dist; // perpendicular
+      const bulge = dist * 0.2;
+
+      ctx.save();
+      const cp1x = ox + dx * 0.3 + px * bulge;
+      const cp1y = oy + dy * 0.3 + py * bulge;
+      const cp2x = ox + dx * 0.7 - px * bulge * 0.4;
+      const cp2y = oy + dy * 0.7 - py * bulge * 0.4;
+
+      // Dark outline
+      ctx.beginPath();
+      ctx.moveTo(ox, oy);
+      ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, tip.x, tip.y);
+      ctx.strokeStyle = 'rgba(150,20,50,0.75)';
+      ctx.lineWidth = 32;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+
+      // Main tongue body
+      ctx.strokeStyle = '#f06080';
+      ctx.lineWidth = 26;
+      ctx.stroke();
+
+      // Highlight
+      ctx.strokeStyle = 'rgba(255,160,190,0.65)';
+      ctx.lineWidth = 10;
+      ctx.stroke();
+
+      // Tip bulb
+      ctx.beginPath();
+      ctx.arc(tip.x, tip.y, 15, 0, Math.PI * 2);
+      ctx.fillStyle = '#d8304e';
+      ctx.fill();
+      ctx.strokeStyle = '#f97b9a';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Divot
+      ctx.beginPath();
+      ctx.moveTo(tip.x, tip.y - 5);
+      ctx.bezierCurveTo(tip.x + 4, tip.y + 2, tip.x - 4, tip.y + 2, tip.x, tip.y + 6);
+      ctx.strokeStyle = 'rgba(180,20,50,0.55)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.restore();
+      return tip;
+    }
+
+    // ─── FOOD SPAWNING ───────────────────────────────────────────────
+    const SPAWN_INTERVAL = 48;
+
+    function spawnFood() {
+      const t = FOOD_TYPES[Math.floor(Math.random() * FOOD_TYPES.length)];
+      foods.push({
+        ...t,
+        x: 60 + Math.random() * (W - 120),
+        y: 90,
+        vy: 1.6 + Math.random() * 2.2,
+        vx: (Math.random() - 0.5) * 1.0,
+        rotation: 0,
+        rotSpeed: (Math.random() - 0.5) * 0.07,
+        wobble: Math.random() * Math.PI * 2,
+        wobbleSpeed: 0.04 + Math.random() * 0.04,
+        caught: false,
+        opacity: 1,
+        catchX: 0, catchY: 0,
+      });
+    }
+
+    // ─── PARTICLES ───────────────────────────────────────────────────
+    function spawnParticles(x, y) {
+      const sparks = ['✨', '⭐', '💫', '🌟'];
+      for (let i = 0; i < 9; i++) {
+        const angle = (i / 9) * Math.PI * 2;
+        const spd = 2.5 + Math.random() * 4;
+        particles.push({
+          x, y,
+          vx: Math.cos(angle) * spd,
+          vy: Math.sin(angle) * spd - 2,
+          life: 1,
+          decay: 0.035 + Math.random() * 0.03,
+          size: 7 + Math.random() * 9,
+          emoji: sparks[Math.floor(Math.random() * sparks.length)],
+        });
+      }
+    }
+
+    // ─── SCORE POPUP ─────────────────────────────────────────────────
+    function showPopup(x, y, txt) {
+      const wrap = document.getElementById('game-wrapper');
+      const el = document.createElement('div');
+      el.className = 'score-popup';
+      el.style.left = (x - 20) + 'px';
+      el.style.top = (y - 40) + 'px';
+      el.textContent = txt;
+      wrap.appendChild(el);
+      setTimeout(() => el.remove(), 950);
+    }
+
+    // ─── MOUTH INDICATOR ─────────────────────────────────────────────
+    function updateMouthIndicator() {
+      const el = document.getElementById('mouth-indicator');
+      if (!gameActive) { el.style.display = 'none'; return; }
+      el.style.display = 'block';
+      el.className = mouthOpen ? 'open' : '';
+      el.textContent = mouthOpen ? '😮 MOUTH OPEN' : '😐 Close mouth';
+    }
+
+    // ─── GAME LOOP ───────────────────────────────────────────────────
+    function gameLoop() {
+      if (!gameActive) return;
+      frameCount++;
+      ctx.clearRect(0, 0, W, H);
+
+      // 1. Render segmented person
+      compositeSegmentation();
+
+      // 2. Tongue spring physics
+      const targetLen = mouthOpen ? TONGUE_MAX : 0;
+      tongueLen += (targetLen - tongueLen) * TONGUE_SPRING;
+
+      // 3. Spawn food
+      spawnCount++;
+      if (spawnCount >= SPAWN_INTERVAL) { spawnFood(); spawnCount = 0; }
+
+      // 4. Update + draw foods
+      for (let f of foods) {
+        if (!f.caught) {
+          f.wobble += f.wobbleSpeed;
+          f.x += f.vx + Math.sin(f.wobble) * 0.5;
+          f.y += f.vy;
+          f.rotation += f.rotSpeed;
+        } else {
+          f.opacity -= 0.06;
+          f.y -= 3;
+        }
+      }
+      foods = foods.filter(f => f.y < H + 80 && f.opacity > 0);
+
+      ctx.save();
+      for (let f of foods) {
+        ctx.globalAlpha = f.opacity;
+        ctx.save();
+        ctx.translate(f.x, f.y);
+        ctx.rotate(f.rotation);
+        ctx.shadowColor = f.id === 'crab' ? 'rgba(255,80,0,0.9)' : 'rgba(0,0,0,0.4)';
+        ctx.shadowBlur = f.id === 'crab' ? 22 : 8;
+        ctx.shadowOffsetY = 4;
+        ctx.font = `${f.sz}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(f.emoji, 0, 0);
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+
+      // 5. Draw + record tongue, then tilt indicator
+      const tip = drawTongue();
+
+      // Draw head-tilt aim indicator (arc + movable dot) when mouth closed
+      {
+        const ox = mouthCenter.x, oy = mouthCenter.y;
+        const aimAngle = headTiltAngle - Math.PI / 2;
+        const r = 42;
+        ctx.save();
+        // Subtle arc
+        ctx.beginPath();
+        ctx.arc(ox, oy, r, -Math.PI * 0.75, Math.PI * 0.25);
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        // Moving dot = tongue direction
+        const dotX = ox + Math.cos(aimAngle) * r;
+        const dotY = oy + Math.sin(aimAngle) * r;
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, 7, 0, Math.PI * 2);
+        const grad = ctx.createRadialGradient(dotX, dotY, 0, dotX, dotY, 7);
+        grad.addColorStop(0, mouthOpen ? '#7bff7b' : '#FFD700');
+        grad.addColorStop(1, 'rgba(255,200,0,0)');
+        ctx.fillStyle = grad;
+        ctx.fill();
+        // Tiny label
+        if (!mouthOpen) {
+          ctx.font = '10px Nunito, sans-serif';
+          ctx.fillStyle = 'rgba(255,255,200,0.55)';
+          ctx.textAlign = 'center';
+          ctx.fillText('tilt to aim', ox, oy + r + 14);
+        }
+        ctx.restore();
+      }
+
+      // 6. Collision detection (only when tongue is out)
+      if (tip && tongueLen > 30) {
+        for (let f of foods) {
+          if (f.caught) continue;
+          const d = Math.hypot(f.x - tip.x, f.y - tip.y);
+          if (d < f.sz * 0.7 + 15) {
+            f.caught = true;
+            f.catchX = f.x; f.catchY = f.y;
+            score += f.pts;
+            caughtFoods.push({ ...f });
+            spawnParticles(f.x, f.y);
+            showPopup(f.x, f.y, `+${f.pts} ${f.emoji}`);
+            document.getElementById('score-display').textContent = `🍴 Score: ${score}`;
+          }
+        }
+      }
+
+      // 7. Particles
+      ctx.save();
+      for (let p of particles) {
+        p.x += p.vx; p.y += p.vy; p.vy += 0.14;
+        p.life -= p.decay;
+        if (p.life <= 0) continue;
+        ctx.globalAlpha = p.life;
+        ctx.font = `${p.size}px serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(p.emoji, p.x, p.y);
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      particles = particles.filter(p => p.life > 0);
+
+      // 8. Record tongue trace
+      if (tip && frameCount % 3 === 0) {
+        tonguePoints.push({ x: tip.x, y: tip.y, open: mouthOpen });
+        const tx = (tip.x / W) * 220;
+        const ty = (tip.y / H) * 66;
+        traceCtx.beginPath();
+        traceCtx.arc(tx, ty, 2.2, 0, Math.PI * 2);
+        const hue = (tonguePoints.length * 4) % 360;
+        traceCtx.fillStyle = `hsl(${hue},100%,65%)`;
+        traceCtx.fill();
+      }
+
+      // 9. Composite all layers onto record canvas every frame
+      recCtx.drawImage(bgCanvas, 0, 0);
+      recCtx.drawImage(segCanvas, 0, 0);
+      recCtx.drawImage(gameCanvas, 0, 0);
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ─── TIMER ───────────────────────────────────────────────────────
+    function startTimer() {
+      timeLeft = 10;
+      const timerEl = document.getElementById('timer-display');
+      timerEl.textContent = '10';
+      timerEl.style.color = '#FFD700';
+      timerEl.style.textShadow = '0 0 12px rgba(255,215,0,0.8)';
+
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        timerEl.textContent = timeLeft;
+        if (timeLeft <= 3) {
+          timerEl.style.color = '#ff4444';
+          timerEl.style.textShadow = '0 0 15px rgba(255,50,50,0.9)';
+        }
+        if (timeLeft <= 0) { clearInterval(timerInterval); endGame(); }
+      }, 1000);
+    }
+
+    // ─── START / END ─────────────────────────────────────────────────
+    function startGame() {
+      score = 0; foods = []; particles = [];
+      tonguePoints = []; caughtFoods = [];
+      spawnCount = 0; frameCount = 0; tongueLen = 0;
+      traceCtx.clearRect(0, 0, 220, 66);
+      document.getElementById('score-display').textContent = '🍴 Score: 0';
+      document.getElementById('start-screen').style.display = 'none';
+      document.getElementById('end-screen').style.display = 'none';
+      document.getElementById('mouth-indicator').style.display = 'block';
+      gameActive = true;
+      startRecording();
+      startTimer();
+      requestAnimationFrame(gameLoop);
+    }
+
+    function endGame() {
+      gameActive = false;
+      stopRecording();
+      document.getElementById('mouth-indicator').style.display = 'none';
+      document.getElementById('final-score').textContent = `You scored: ${score} pts 🎉`;
+
+      const logEl = document.getElementById('food-log');
+      if (caughtFoods.length === 0) {
+        logEl.innerHTML = '<span style="color:rgba(255,200,100,0.5)">Nothing caught! Try again 😅</span>';
+      } else {
+        const counts = {};
+        caughtFoods.forEach(f => {
+          if (!counts[f.label]) counts[f.label] = { count: 0, pts: 0, emoji: f.emoji };
+          counts[f.label].count++;
+          counts[f.label].pts += f.pts;
+        });
+        logEl.innerHTML = Object.entries(counts).map(([lbl, v]) =>
+          `<span style="display:inline-block;margin:1px 6px;">${v.emoji} <strong>${lbl}</strong> ×${v.count} <span style="color:#FFD700">+${v.pts}pts</span></span>`
+        ).join('<br>');
+      }
+
+      renderArt();
+      document.getElementById('end-screen').style.display = 'flex';
+      document.getElementById('contact-name').value = '';
+      document.getElementById('contact-phone').value = '';
+      document.getElementById('contact-email').value = '';
+
+      // Save to leaderboard
+      saveToLeaderboard('Anonymous', score);
+      renderLeaderboard();
+    }
+
+    // ─── LEADERBOARD (localStorage) ──────────────────────────────────
+    const LB_KEY = 'sf_food_catcher_lb';
+    let currentEntryIndex = -1;
+
+    function saveToLeaderboard(name, pts) {
+      let lb = getLeaderboard();
+      const entry = { name, pts, date: new Date().toLocaleDateString() };
+      lb.push(entry);
+      lb.sort((a, b) => b.pts - a.pts);
+      lb = lb.slice(0, 10);
+      localStorage.setItem(LB_KEY, JSON.stringify(lb));
+      // Find this entry's index
+      currentEntryIndex = lb.findIndex(e => e.pts === pts && e.name === name && e.date === entry.date);
+    }
+
+    function getLeaderboard() {
+      try { return JSON.parse(localStorage.getItem(LB_KEY) || '[]'); }
+      catch { return []; }
+    }
+
+    function updateLeaderboardName(name) {
+      let lb = getLeaderboard();
+      if (currentEntryIndex >= 0 && currentEntryIndex < lb.length) {
+        lb[currentEntryIndex].name = name;
+        localStorage.setItem(LB_KEY, JSON.stringify(lb));
+      }
+    }
+
+    function renderLeaderboard() {
+      const lb = getLeaderboard();
+      const el = document.getElementById('leaderboard-list');
+      if (lb.length === 0) {
+        el.innerHTML = '<div style="color:rgba(255,255,200,0.4);font-size:13px;">No scores yet!</div>';
+        return;
+      }
+      const medals = ['🥇', '🥈', '🥉'];
+      const rankClass = ['gold', 'silver', 'bronze'];
+      el.innerHTML = lb.map((entry, i) => {
+        const isYou = i === currentEntryIndex;
+        return `<div class="lb-row">
+          <span class="lb-rank ${rankClass[i] || ''}">${medals[i] || (i + 1)}</span>
+          <span class="lb-name">${entry.name}${isYou ? '<span class="lb-you"> ← YOU</span>' : ''}</span>
+          <span class="lb-pts">${entry.pts} pts</span>
+          <span style="font-size:11px;color:rgba(255,255,200,0.3);margin-left:4px;">${entry.date}</span>
+        </div>`;
+      }).join('');
+    }
+
+    function renderArt() {
+      const aw = 360, ah = 270;
+      artCtx.clearRect(0, 0, aw, ah);
+
+      if (tonguePoints.length < 2) {
+        artCtx.fillStyle = '#05050f';
+        artCtx.fillRect(0, 0, aw, ah);
+        artCtx.fillStyle = 'rgba(255,255,200,0.2)';
+        artCtx.font = '14px Nunito, sans-serif';
+        artCtx.textAlign = 'center';
+        artCtx.textBaseline = 'middle';
+        artCtx.fillText('No tongue trace recorded', aw / 2, ah / 2);
+        return;
+      }
+
+      // ── 1. Bounding box of tongue trace ──────────────────────────────
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      tonguePoints.forEach(p => {
+        minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+      });
+
+      // Centre of trace
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+
+      // Equal margin: add 30% of the larger span on all sides so it's centred
+      const span = Math.max(maxX - minX, maxY - minY, 80);
+      const pad = span * 0.35;
+
+      // Source crop centred on cx, cy
+      let srcW = span + pad * 2;
+      let srcH = span + pad * 2;
+
+      // Letterbox to match art canvas aspect ratio
+      const destAspect = aw / ah;
+      const srcAspect = srcW / srcH;
+      if (srcAspect > destAspect) {
+        srcH = srcW / destAspect;
+      } else {
+        srcW = srcH * destAspect;
+      }
+
+      let srcX = cx - srcW / 2;
+      let srcY = cy - srcH / 2;
+
+      // Clamp inside game bounds
+      srcX = Math.max(0, Math.min(W - srcW, srcX));
+      srcY = Math.max(0, Math.min(H - srcH, srcY));
+
+      // ── 2. Render into high-res offscreen ────────────────────────────
+      const tmp = new OffscreenCanvas(W, H);
+      const tCtx = tmp.getContext('2d');
+
+      // Dark deep-space background
+      tCtx.fillStyle = '#020510';
+      tCtx.fillRect(0, 0, W, H);
+
+      // Starfield
+      const rng = (seed => () => ((seed = seed * 16807 % 2147483647) / 2147483647))(42);
+      for (let s = 0; s < 220; s++) {
+        const sx = rng() * W, sy = rng() * H;
+        const sr = rng() * 1.4 + 0.2;
+        const sa = rng() * 0.6 + 0.2;
+        tCtx.beginPath();
+        tCtx.arc(sx, sy, sr, 0, Math.PI * 2);
+        tCtx.fillStyle = `rgba(255,255,255,${sa})`;
+        tCtx.fill();
+      }
+
+      // Multi-pass stroke: bloom → glow → main line
+      const passes = [
+        { width: 60, alpha: 0.06, light: 80 },
+        { width: 32, alpha: 0.15, light: 72 },
+        { width: 16, alpha: 0.35, light: 75 },
+        { width: 7, alpha: 0.90, light: 65 },
+        { width: 2, alpha: 1.00, light: 100 },
+      ];
+
+      for (const pass of passes) {
+        for (let i = 1; i < tonguePoints.length; i++) {
+          const a = tonguePoints[i - 1], b = tonguePoints[i];
+          const hue = (i / tonguePoints.length) * 360;
+          tCtx.beginPath();
+          tCtx.moveTo(a.x, a.y);
+          tCtx.lineTo(b.x, b.y);
+          tCtx.strokeStyle = `hsla(${hue},100%,${pass.light}%,${pass.alpha})`;
+          tCtx.lineWidth = pass.width;
+          tCtx.lineCap = 'round';
+          tCtx.lineJoin = 'round';
+          tCtx.stroke();
+        }
+      }
+
+      // Shimmer dots at each recorded point
+      for (let i = 0; i < tonguePoints.length; i += 4) {
+        const p = tonguePoints[i];
+        const hue = (i / tonguePoints.length) * 360;
+        tCtx.beginPath();
+        tCtx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+        tCtx.fillStyle = `hsla(${hue},100%,90%,0.55)`;
+        tCtx.fill();
+      }
+
+      // ── 3. Crop centred region into art canvas ───────────────────────
+      artCtx.drawImage(tmp, srcX, srcY, srcW, srcH, 0, 0, aw, ah);
+
+      // ── 4. Radial vignette overlay ────────────────────────────────────
+      const vig = artCtx.createRadialGradient(aw / 2, ah / 2, aw * 0.28, aw / 2, ah / 2, aw * 0.75);
+      vig.addColorStop(0, 'rgba(0,0,0,0)');
+      vig.addColorStop(1, 'rgba(0,0,15,0.65)');
+      artCtx.fillStyle = vig;
+      artCtx.fillRect(0, 0, aw, ah);
+
+      // ── 5. Subtle inner border glow ───────────────────────────────────
+      artCtx.strokeStyle = 'rgba(255,200,80,0.18)';
+      artCtx.lineWidth = 3;
+      artCtx.strokeRect(1.5, 1.5, aw - 3, ah - 3);
+    }
+
+    // ─── SEND / DOWNLOAD ART ─────────────────────────────────────────
+    document.getElementById('send-art-btn').addEventListener('click', () => {
+      const name = document.getElementById('contact-name').value.trim() || 'Anonymous';
+      const phone = document.getElementById('contact-phone').value.trim() || '';
+      const email = document.getElementById('contact-email').value.trim() || '';
+      const status = document.getElementById('send-status');
+
+      // Update leaderboard with real name
+      updateLeaderboardName(name);
+      renderLeaderboard();
+
+      // Build filename slug: name_phone_email
+      const slug = [name, phone, email]
+        .map(s => s.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9@._+-]/g, ''))
+        .filter(Boolean).join('_');
+
+      // 1. Download art PNG
+      const artLink = document.createElement('a');
+      artLink.download = `${slug}.png`;
+      artLink.href = artCanvas.toDataURL('image/png');
+      artLink.click();
+
+      // 2. Download game video
+      if (recordedVideoUrl) {
+        setTimeout(() => {
+          const vidLink = document.createElement('a');
+          vidLink.download = `${slug}.webm`;
+          vidLink.href = recordedVideoUrl;
+          vidLink.click();
+        }, 400);
+      }
+
+      const contact = phone || email;
+      status.textContent = contact
+        ? `✅ Saved! We'll reach out at ${contact} 🎨`
+        : '✅ Saved! Add phone/email to get them sent directly.';
+      status.style.color = contact ? '#7bff7b' : '#FFD700';
+    });
+
+    // ─── CAMERA + MEDIAPIPE INIT ─────────────────────────────────────
+    async function initCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: W, height: H, facingMode: 'user' },
+          audio: false,
+        });
+        video.srcObject = stream;
+        await video.play();
+
+        initMediaPipe();
+
+        const camera = new Camera(video, {
+          onFrame: async () => {
+            // Feed both models every frame
+            await selfieSegmentation.send({ image: video });
+            await faceMesh.send({ image: video });
+          },
+          width: W,
+          height: H,
+        });
+        await camera.start();
+
+        segmentationReady = true;
+        // camera ready
+        document.getElementById('start-btn').disabled = false;
+      } catch (err) {
+        console.error('Camera error:', err);
+        // camera denied
+        // Fallback: enable button anyway so game can run without camera
+        document.getElementById('start-btn').disabled = false;
+        document.getElementById('hud-tip').textContent = 'Move mouse to aim tongue (no camera)';
+        // Mouse fallback mode
+        enableMouseFallback();
+      }
+    }
+
+    // ─── MOUSE FALLBACK (no camera) ──────────────────────────────────
+    function enableMouseFallback() {
+      gameCanvas.addEventListener('mousemove', (e) => {
+        const r = gameCanvas.getBoundingClientRect();
+        const mx = (e.clientX - r.left) * (W / r.width);
+        const my = (e.clientY - r.top) * (H / r.height);
+        // Point mouth center toward mouse
+        headTiltAngle = Math.atan2(my - mouthCenter.y, mx - mouthCenter.x) + Math.PI;
+        mouthCenter.x = W / 2;
+        mouthCenter.y = H * 0.7;
+      });
+      gameCanvas.addEventListener('mousedown', () => { mouthOpen = true; });
+      gameCanvas.addEventListener('mouseup', () => { mouthOpen = false; });
+      gameCanvas.addEventListener('touchstart', e => {
+        e.preventDefault();
+        mouthOpen = true;
+        const t = e.touches[0], r = gameCanvas.getBoundingClientRect();
+        headTiltAngle = Math.atan2(
+          (t.clientY - r.top) * (H / r.height) - mouthCenter.y,
+          (t.clientX - r.left) * (W / r.width) - mouthCenter.x
+        ) + Math.PI;
+      }, { passive: false });
+      gameCanvas.addEventListener('touchend', () => { mouthOpen = false; });
+    }
+
+    // ─── BUTTONS ─────────────────────────────────────────────────────
+    document.getElementById('start-btn').addEventListener('click', startGame);
+    document.getElementById('replay-btn').addEventListener('click', () => {
+      document.getElementById('end-screen').style.display = 'none';
+      startGame();
+    });
+
+    // ─── BOOT ────────────────────────────────────────────────────────
+    initCamera();
+  </script>
+</body>
+
+</html>
