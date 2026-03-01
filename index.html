@@ -27,17 +27,19 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100vh;
-      overflow: hidden;
+      min-height: 100dvh;
+      padding: 12px;
+      overflow-x: hidden;
       font-family: 'Nunito', sans-serif;
       user-select: none;
     }
 
     #game-wrapper {
       position: relative;
-      width: 540px;
-      height: 720px;
-      border-radius: 20px;
+      /* Scales to fit any screen while keeping 3:4 portrait ratio */
+      width: min(540px, 100vw, calc((100dvh - 24px) * 0.75));
+      aspect-ratio: 3 / 4;
+      border-radius: clamp(8px, 2vw, 20px);
       overflow: hidden;
       box-shadow: 0 0 60px rgba(255, 150, 50, 0.5), 0 0 120px rgba(255, 100, 20, 0.25);
     }
@@ -94,7 +96,7 @@
 
     /* Tongue trace mini map */
     #trace-canvas {
-      width: 220px;
+      width: clamp(120px, 30vw, 220px);
       height: 66px;
       border: 1.5px solid rgba(255, 200, 80, 0.35);
       border-radius: 10px;
@@ -111,14 +113,14 @@
 
     #timer-display {
       font-family: 'Bangers', cursive;
-      font-size: 38px;
+      font-size: clamp(24px, 5vw, 38px);
       color: #FFD700;
       text-shadow: 0 0 12px rgba(255, 215, 0, 0.8);
       line-height: 1;
     }
 
     #score-display {
-      font-size: 17px;
+      font-size: clamp(13px, 3vw, 17px);
       font-weight: 900;
       color: #fff;
     }
@@ -247,6 +249,8 @@
       border-radius: 14px;
       background: #05050f;
       box-shadow: 0 0 24px rgba(255, 200, 80, 0.2);
+      width: 100%;
+      height: auto;
     }
 
     /* Food log */
